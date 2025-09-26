@@ -1,6 +1,4 @@
-pandas==2.2.3
-numpy==2.1.1
-matplotlib==3.9.2
-seaborn==0.13.2
-scikit-learn==1.5.1
-jupyter==1.1.1
+streamlit>=1.18.0
+pandas
+numpy
+fpdf2
