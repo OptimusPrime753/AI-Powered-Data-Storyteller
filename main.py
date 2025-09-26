@@ -1,4 +1,4 @@
-# app_pdf_patch_fixed.py
+# app_pdf_patch_visuals.py
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -10,6 +10,13 @@ import io
 import re
 import traceback
 from pathlib import Path
+
+# Plotly and plotting (visualizations)
+import matplotlib.pyplot as plt
+import seaborn as sns
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 # Page configuration
 st.set_page_config(
@@ -85,9 +92,60 @@ class DataAnalyzer:
         return results
 
 
+class InteractiveVisualizations:
+    def __init__(self, df):
+        self.df = df
+
+    def create_correlation_heatmap(self):
+        numeric_cols = self.df.select_dtypes(include=[np.number]).columns
+        if len(numeric_cols) < 2:
+            return None
+        corr_matrix = self.df[numeric_cols].corr()
+        fig = px.imshow(
+            corr_matrix,
+            text_auto=True,
+            aspect="auto",
+            color_continuous_scale='RdBu_r',
+            title="Correlation Heatmap"
+        )
+        fig.update_layout(height=600)
+        return fig
+
+    def create_distribution_plots(self):
+        numeric_cols = self.df.select_dtypes(include=[np.number]).columns
+        if len(numeric_cols) == 0:
+            return None
+        cols = min(2, len(numeric_cols))
+        rows = (len(numeric_cols) + cols - 1) // cols
+        fig = make_subplots(rows=rows, cols=cols, subplot_titles=[f"Distribution of {col}" for col in numeric_cols])
+        for i, col in enumerate(numeric_cols):
+            row = (i // cols) + 1
+            col_num = (i % cols) + 1
+            fig.add_trace(go.Histogram(x=self.df[col], name=col, nbinsx=30), row=row, col=col_num)
+        fig.update_layout(height=300 * rows, title_text="Distribution Analysis", showlegend=False)
+        return fig
+
+    def create_scatter_matrix(self):
+        numeric_cols = self.df.select_dtypes(include=[np.number]).columns
+        if len(numeric_cols) < 2:
+            return None
+        selected_cols = numeric_cols[:4] if len(numeric_cols) > 4 else numeric_cols
+        fig = px.scatter_matrix(self.df[selected_cols], title="Scatter Matrix", height=800)
+        return fig
+
+    def create_categorical_analysis(self):
+        categorical_cols = self.df.select_dtypes(include=['object', 'category']).columns
+        numeric_cols = self.df.select_dtypes(include=[np.number]).columns
+        if len(categorical_cols) > 0 and len(numeric_cols) > 0:
+            cat_col = categorical_cols[0]
+            num_col = numeric_cols[0]
+            fig = px.box(self.df, x=cat_col, y=num_col, title=f"{num_col} by {cat_col}", height=500)
+            return fig
+        return None
+
+
 class ReportGenerator:
     def __init__(self):
-        # nothing to store here for now
         pass
 
     def clean_text(self, text):
@@ -95,45 +153,35 @@ class ReportGenerator:
         if text is None:
             return ""
         s = str(text)
-        # replace common bullets/emojis/dashes with ascii equivalents
         s = s.replace("•", "- ")
         s = s.replace("–", "-").replace("—", "-")
-        # remove emoji ranges and other non-ascii characters
-        # wide emoji block
         try:
             s = re.sub(r'[\U0001F300-\U0001FAFF]', '', s)
         except re.error:
-            # if regex above not supported on this narrow build, skip it
             pass
-        s = re.sub(r'[^\x00-\x7F]+', '', s)  # remove remaining non-ascii
+        s = re.sub(r'[^\x00-\x7F]+', '', s)
         return s
 
     def _write_multiline(self, pdf: FPDF, text: str, line_height: float = 7):
-        """Write sanitized multiline text to pdf using a safe width."""
         safe = self.clean_text(text)
         usable_w = float(pdf.w) - float(pdf.l_margin) - float(pdf.r_margin)
         if usable_w <= 0:
-            # set conservative margins
             pdf.set_left_margin(10)
             pdf.set_right_margin(10)
             usable_w = float(pdf.w) - float(pdf.l_margin) - float(pdf.r_margin)
             if usable_w <= 0:
                 raise RuntimeError("Page width too small to render text.")
-        # multi_cell with usable width
         pdf.multi_cell(usable_w, line_height, txt=safe)
         return
 
     def generate_pdf_bytes(self, analysis_results, insights):
         """
         Generate PDF in memory and return bytes.
-        Returns: bytes (PDF) on success, or None on failure.
         """
         try:
-            # Create FPDF and configure
             pdf = FPDF()
             pdf.set_auto_page_break(auto=True, margin=15)
             pdf.add_page()
-            # Use a basic latin font available by default
             DEFAULT_FONT = "Arial"
             pdf.set_font(DEFAULT_FONT, size=12)
 
@@ -154,7 +202,6 @@ class ReportGenerator:
             pdf.ln(2)
             pdf.set_font(DEFAULT_FONT, size=11)
             for insight in (insights or [])[:6]:
-                # Clean insight and write as a short paragraph
                 txt = self.clean_text(insight).replace("**", "")
                 self._write_multiline(pdf, f"- {txt}", line_height=7)
             pdf.ln(4)
@@ -184,7 +231,6 @@ class ReportGenerator:
             if numeric_cols:
                 for col in numeric_cols:
                     stats = numeric_stats.get(col, {})
-                    # stats might be dict-like; safely fetch values
                     cnt = stats.get('count', '')
                     mn = stats.get('min', '')
                     mx = stats.get('max', '')
@@ -230,10 +276,9 @@ class ReportGenerator:
             for i, r in enumerate(recs, 1):
                 self._write_multiline(pdf, f"{i}. {self.clean_text(r)}", line_height=6.5)
 
-            # Output PDF to bytes (fpdf2: dest='S' returns bytes; older fpdf may return str)
-            out = pdf.output(dest='S')  # fpdf/fpdf2 may return str, bytes, bytearray, memoryview
+            # Output PDF to bytes
+            out = pdf.output(dest='S')
 
-            # Normalize to bytes robustly
             if isinstance(out, str):
                 pdf_bytes = out.encode('latin-1', errors='replace')
             elif isinstance(out, bytearray):
@@ -243,7 +288,6 @@ class ReportGenerator:
             elif isinstance(out, bytes):
                 pdf_bytes = out
             else:
-                # fallback
                 pdf_bytes = str(out).encode('latin-1', errors='replace')
 
             return pdf_bytes
@@ -281,7 +325,7 @@ def main():
                     with st.spinner("Performing comprehensive analysis..."):
                         st.session_state.analysis_results = st.session_state.analyzer.perform_comprehensive_analysis()
                         analyzer = st.session_state.analyzer
-                        # generate insights based on analysis results (simple)
+
                         def make_insights(results):
                             ins = []
                             if not results:
@@ -298,9 +342,9 @@ def main():
                             if results.get('duplicates', 0) > 0:
                                 ins.append(f"{results.get('duplicates')} duplicate rows detected.")
                             return ins
+
                         st.session_state.insights = make_insights(st.session_state.analysis_results)
                         st.session_state.analysis_done = True
-                        # safe rerun for modern streamlit
                         try:
                             st.rerun()
                         except Exception:
@@ -383,7 +427,57 @@ def main():
 
         with tab3:
             st.header("📈 Interactive Visualizations")
-            st.info("Interactive visualizations disabled in this patch demo (keeps focus on robust PDF generation).")
+            visualizer = InteractiveVisualizations(st.session_state.analyzer.df)
+
+            viz_option = st.selectbox(
+                "Choose Visualization Type",
+                ["Correlation Heatmap", "Distribution Analysis", "Scatter Matrix", "Categorical Analysis", "All Visualizations"]
+            )
+
+            if viz_option == "Correlation Heatmap":
+                fig = visualizer.create_correlation_heatmap()
+                if fig:
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.warning("Need at least 2 numeric columns for correlation analysis")
+
+            elif viz_option == "Distribution Analysis":
+                fig = visualizer.create_distribution_plots()
+                if fig:
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.warning("No numeric columns found for distribution analysis")
+
+            elif viz_option == "Scatter Matrix":
+                fig = visualizer.create_scatter_matrix()
+                if fig:
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.warning("Need at least 2 numeric columns for scatter matrix")
+
+            elif viz_option == "Categorical Analysis":
+                fig = visualizer.create_categorical_analysis()
+                if fig:
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.warning("Need both categorical and numeric columns for this analysis")
+
+            elif viz_option == "All Visualizations":
+                col1, col2 = st.columns(2)
+                with col1:
+                    fig1 = visualizer.create_correlation_heatmap()
+                    if fig1:
+                        st.plotly_chart(fig1, use_container_width=True)
+                    fig3 = visualizer.create_distribution_plots()
+                    if fig3:
+                        st.plotly_chart(fig3, use_container_width=True)
+                with col2:
+                    fig2 = visualizer.create_scatter_matrix()
+                    if fig2:
+                        st.plotly_chart(fig2, use_container_width=True)
+                    fig4 = visualizer.create_categorical_analysis()
+                    if fig4:
+                        st.plotly_chart(fig4, use_container_width=True)
 
         with tab4:
             st.header("📄 Report Generation")
@@ -404,7 +498,7 @@ def main():
                             )
                         else:
                             st.error("PDF generation failed. Check app logs for details.")
-                    except Exception as e:
+                    except Exception:
                         st.error("Unexpected error while generating report. See traceback below.")
                         st.text(traceback.format_exc())
 
@@ -438,7 +532,6 @@ def main():
                 sample_df = pd.DataFrame(sample_data)
                 st.session_state.analyzer.df = sample_df
                 st.session_state.analysis_results = st.session_state.analyzer.perform_comprehensive_analysis()
-                # regenerate insights
                 st.session_state.insights = [
                     f"Dataset contains {st.session_state.analysis_results['shape'][0]:,} rows and {st.session_state.analysis_results['shape'][1]} columns.",
                     f"{len(st.session_state.analysis_results['numeric_columns'])} numeric columns detected.",
