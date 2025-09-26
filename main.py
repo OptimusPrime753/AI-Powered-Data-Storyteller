@@ -227,7 +227,7 @@ class ReportGenerator:
                     # Add bullet point
                     pdf.set_font("Arial", '', 11)
                     effective_width = pdf.w - pdf.l_margin - pdf.r_margin - 5  # Space for bullet
-                    pdf.cell(5, 6, txt="•")  # Bullet point
+                    pdf.cell(5, 6, txt="-")  # Bullet point
                     pdf.multi_cell(effective_width, 6, txt=cleaned_insight, align='L')
                     pdf.ln(1)
             else:
@@ -252,7 +252,7 @@ class ReportGenerator:
             ]
             
             for item in overview_data:
-                pdf.cell(5, 6, txt="•")
+                pdf.cell(5, 6, txt="-")
                 pdf.multi_cell(pdf.w - pdf.l_margin - pdf.r_margin - 5, 6, txt=item, align='L')
                 pdf.ln(1)
 
