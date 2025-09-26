@@ -1,4 +1,4 @@
-# app_pdf_patch.py
+# app_pdf_patch_fixed.py
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -99,7 +99,12 @@ class ReportGenerator:
         s = s.replace("•", "- ")
         s = s.replace("–", "-").replace("—", "-")
         # remove emoji ranges and other non-ascii characters
-        s = re.sub(r'[\U0001F300-\U0001FAFF]', '', s)  # wide emoji block
+        # wide emoji block
+        try:
+            s = re.sub(r'[\U0001F300-\U0001FAFF]', '', s)
+        except re.error:
+            # if regex above not supported on this narrow build, skip it
+            pass
         s = re.sub(r'[^\x00-\x7F]+', '', s)  # remove remaining non-ascii
         return s
 
@@ -219,31 +224,34 @@ class ReportGenerator:
                 "Investigate and remove/resolve duplicate rows if they are erroneous.",
                 "Explore strong correlations for feature engineering or multicollinearity.",
                 "Handle outliers and validate distributions of numeric variables.",
-                "Consider collecting more data if the dataset is small (<100 records)."]
-            
-pdf.set_font(DEFAULT_FONT, size=10)
-for i, r in enumerate(recs, 1):
-    self._write_multiline(pdf, f"{i}. {self.clean_text(r)}", line_height=6.5)
+                "Consider collecting more data if the dataset is small (<100 records)."
+            ]
+            pdf.set_font(DEFAULT_FONT, size=10)
+            for i, r in enumerate(recs, 1):
+                self._write_multiline(pdf, f"{i}. {self.clean_text(r)}", line_height=6.5)
 
-# Output PDF to bytes (fpdf2: dest='S' returns bytes; older fpdf may return str)
-out = pdf.output(dest='S')  # fpdf/fpdf2 may return str, bytes, bytearray, memoryview
+            # Output PDF to bytes (fpdf2: dest='S' returns bytes; older fpdf may return str)
+            out = pdf.output(dest='S')  # fpdf/fpdf2 may return str, bytes, bytearray, memoryview
 
-# Normalize to bytes robustly
-if isinstance(out, str):
-    pdf_bytes = out.encode('latin-1', errors='replace')
-elif isinstance(out, bytearray):
-    pdf_bytes = bytes(out)
-elif isinstance(out, memoryview):
-    pdf_bytes = out.tobytes()
-elif isinstance(out, bytes):
-    pdf_bytes = out
-else:
-    # fallback
-    pdf_bytes = str(out).encode('latin-1', errors='replace')
+            # Normalize to bytes robustly
+            if isinstance(out, str):
+                pdf_bytes = out.encode('latin-1', errors='replace')
+            elif isinstance(out, bytearray):
+                pdf_bytes = bytes(out)
+            elif isinstance(out, memoryview):
+                pdf_bytes = out.tobytes()
+            elif isinstance(out, bytes):
+                pdf_bytes = out
+            else:
+                # fallback
+                pdf_bytes = str(out).encode('latin-1', errors='replace')
 
-return pdf_bytes
+            return pdf_bytes
 
-
+        except Exception as e:
+            print("Error generating PDF:", e)
+            traceback.print_exc()
+            return None
 
 
 def main():
