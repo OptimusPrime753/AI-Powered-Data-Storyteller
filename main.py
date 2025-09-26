@@ -221,22 +221,29 @@ class ReportGenerator:
                 "Handle outliers and validate distributions of numeric variables.",
                 "Consider collecting more data if the dataset is small (<100 records)."
             ]
-            pdf.set_font(DEFAULT_FONT, size=10)
-            for i, r in enumerate(recs, 1):
-                self._write_multiline(pdf, f"{i}. {self.clean_text(r)}", line_height=6.5)
+pdf.set_font(DEFAULT_FONT, size=10)
+for i, r in enumerate(recs, 1):
+    self._write_multiline(pdf, f"{i}. {self.clean_text(r)}", line_height=6.5)
 
-            # Output PDF to bytes (fpdf2: dest='S' returns bytes; older fpdf may return str)
-            out = pdf.output(dest='S')  # fpdf2 returns bytes; older lib may return str
-            if isinstance(out, str):
-                pdf_bytes = out.encode('latin-1', errors='replace')
-            else:
-                pdf_bytes = out
-            return pdf_bytes
+# Output PDF to bytes (fpdf2: dest='S' returns bytes; older fpdf may return str)
+out = pdf.output(dest='S')  # fpdf/fpdf2 may return str, bytes, bytearray, memoryview
 
-        except Exception as e:
-            print("Error generating PDF:", e)
-            traceback.print_exc()
-            return None
+# Normalize to bytes robustly
+if isinstance(out, str):
+    pdf_bytes = out.encode('latin-1', errors='replace')
+elif isinstance(out, bytearray):
+    pdf_bytes = bytes(out)
+elif isinstance(out, memoryview):
+    pdf_bytes = out.tobytes()
+elif isinstance(out, bytes):
+    pdf_bytes = out
+else:
+    # fallback
+    pdf_bytes = str(out).encode('latin-1', errors='replace')
+
+return pdf_bytes
+
+
 
 
 def main():
