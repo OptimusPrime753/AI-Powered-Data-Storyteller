@@ -219,8 +219,8 @@ class ReportGenerator:
                 "Investigate and remove/resolve duplicate rows if they are erroneous.",
                 "Explore strong correlations for feature engineering or multicollinearity.",
                 "Handle outliers and validate distributions of numeric variables.",
-                "Consider collecting more data if the dataset is small (<100 records)."
-            ]
+                "Consider collecting more data if the dataset is small (<100 records)."]
+            
 pdf.set_font(DEFAULT_FONT, size=10)
 for i, r in enumerate(recs, 1):
     self._write_multiline(pdf, f"{i}. {self.clean_text(r)}", line_height=6.5)
